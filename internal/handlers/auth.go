@@ -14,13 +14,13 @@ type LoginRequest struct {
 func Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
 	}
 
 	token, err := auth.GenerateToken(req.UserID)
 	if err != nil {
-		http.Error(w, "token error", http.StatusInternalServerError)
+		http.Error(w, "Token Error", http.StatusInternalServerError)
 		return
 	}
 
@@ -30,5 +30,5 @@ func Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func Protected(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("you are authenticated"))
+	w.Write([]byte("Authenticated"))
 }
