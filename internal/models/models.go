@@ -1,0 +1,23 @@
+package models
+
+type Topic struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+type Post struct {
+	ID        int    `json:"id"`
+	Title     string `json:"title"`
+	Body      string `json:"body"`
+	Topic     string `json:"topic"`
+	Creator   int    `json:"creator"`
+	CreatedAt string `json:"created_at"`
+}
+
+type Comment struct {
+	ID        int    `json:"id"`
+	Body      string `json:"body"`
+	Post      int    `json:"post"`
+	Creator   int    `json:"creator"`
+	CreatedAt string `json:"created_at"`
+}

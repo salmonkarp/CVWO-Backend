@@ -1,14 +1,16 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 
 	"backend/internal/auth"
+	"backend/internal/db"
 )
 
 type LoginRequest struct {
-	UserID int `json:"user_id"`
+	Username string `json:"username"`
 }
 
 func Login(w http.ResponseWriter, r *http.Request) {
@@ -18,7 +20,20 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := auth.GenerateToken(req.UserID)
+	var userID int
+
+	err := db.Conn.QueryRow(
+		"SELECT id FROM users WHERE username = $1",
+		req.Username,
+	).Scan(&userID)
+
+	if err == sql.ErrNoRows {
+		http.Error(w, "invalid username", http.StatusUnauthorized)
+		return
+	}
+
+	token, _ := auth.GenerateToken(userID)
+
 	if err != nil {
 		http.Error(w, "Token Error", http.StatusInternalServerError)
 		return
