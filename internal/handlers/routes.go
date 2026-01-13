@@ -4,6 +4,7 @@ import (
 	"backend/internal/models"
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 )
 
@@ -51,6 +52,31 @@ func GetTopic(db *sql.DB) http.HandlerFunc {
 			"description": description,
 		})
 	}
+}
+
+func AddTopic(db *sql.DB) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var t models.Topic
+		log.Print(r.Body)
+
+		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			log.Println("Error decoding JSON:", err)
+			return
+		}
+
+		_, err := db.Exec(
+			`INSERT INTO topics (name, description) VALUES ($1, $2)`,
+			t.Name,
+			t.Description,
+		)
+		if err != nil {
+			http.Error(w, "failed to add topic", http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusCreated)
+	})
 }
 
 func GetPostsByTopic(db *sql.DB) http.HandlerFunc {

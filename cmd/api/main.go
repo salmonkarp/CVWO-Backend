@@ -26,9 +26,13 @@ func main() {
 	mux.HandleFunc("/topics/{name}", handlers.GetTopic(db.Conn))
 	mux.HandleFunc("/topics/{name}/posts", handlers.GetPostsByTopic(db.Conn))
 
+	mux.Handle("/addtopic", middleware.Auth(handlers.AddTopic(db.Conn)))
+
 	mux.HandleFunc("/posts/{id}", handlers.GetPost(db.Conn))
 	mux.HandleFunc("/posts/{id}/comments", handlers.GetCommentsByPost(db.Conn))
 
+	handler := middleware.CORS(mux)
+
 	log.Println("API running on :8080")
-	log.Fatal(http.ListenAndServe(":8080", mux))
+	log.Fatal(http.ListenAndServe(":8080", handler))
 }
