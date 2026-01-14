@@ -12,7 +12,7 @@ import (
 func GetTopics(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rows, err := db.Query(`
-            SELECT name, description, image IS NOT NULL
+            SELECT name, description, image IS NOT NULL, EXTRACT(EPOCH FROM image_updated_at)
             FROM topics
         `)
 		if err != nil {
@@ -25,11 +25,12 @@ func GetTopics(db *sql.DB) http.HandlerFunc {
 
 		for rows.Next() {
 			var (
-				t        models.Topic
-				hasImage bool
+				t          models.Topic
+				hasImage   bool
+				imageEpoch float64
 			)
 
-			if err := rows.Scan(&t.Name, &t.Description, &hasImage); err != nil {
+			if err := rows.Scan(&t.Name, &t.Description, &hasImage, &imageEpoch); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -37,6 +38,7 @@ func GetTopics(db *sql.DB) http.HandlerFunc {
 			if hasImage {
 				url := "/topics/" + t.Name + "/image"
 				t.ImageURL = &url
+				t.ImageUpdatedAt = int64(imageEpoch)
 			}
 
 			topics = append(topics, t)
@@ -51,15 +53,16 @@ func GetTopic(db *sql.DB) http.HandlerFunc {
 		name := r.PathValue("name")
 
 		var (
-			t        models.Topic
-			hasImage bool
+			t          models.Topic
+			hasImage   bool
+			imageEpoch float64
 		)
 
 		err := db.QueryRow(
-			`SELECT name, description, image IS NOT NULL
+			`SELECT name, description, image IS NOT NULL, EXTRACT(EPOCH FROM image_updated_at)
              FROM topics WHERE name = $1`,
 			name,
-		).Scan(&t.Name, &t.Description, &hasImage)
+		).Scan(&t.Name, &t.Description, &hasImage, &imageEpoch)
 
 		if err != nil {
 			http.Error(w, "topic not found", http.StatusNotFound)
@@ -69,6 +72,7 @@ func GetTopic(db *sql.DB) http.HandlerFunc {
 		if hasImage {
 			url := "/topics/" + t.Name + "/image"
 			t.ImageURL = &url
+			t.ImageUpdatedAt = int64(imageEpoch)
 		}
 
 		json.NewEncoder(w).Encode(t)
@@ -89,6 +93,7 @@ func GetTopicImage(db *sql.DB) http.HandlerFunc {
 			http.Error(w, "image not found", http.StatusNotFound)
 			return
 		}
+		w.Header().Set("Cache-Control", "no-store")
 
 		w.Header().Set("Content-Type", "image/png")
 		w.Write(image)
@@ -102,8 +107,6 @@ func AddTopic(db *sql.DB) http.Handler {
 			Description string `json:"description"`
 			ImageBase64 string `json:"image,omitempty"`
 		}
-
-		// log.Print(r.Body)
 
 		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
@@ -140,6 +143,54 @@ func AddTopic(db *sql.DB) http.Handler {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
+		}
+
+		w.WriteHeader(http.StatusCreated)
+	})
+}
+
+func EditTopic(db *sql.DB) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var t struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			ImageBase64 string `json:"image,omitempty"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			log.Println("Error decoding JSON:", err)
+			return
+		}
+
+		var imgBytes []byte
+		if t.ImageBase64 != "" {
+			var err error
+			imgBytes, err = base64.StdEncoding.DecodeString(t.ImageBase64)
+			if err != nil {
+				http.Error(w, "invalid base64 image", http.StatusBadRequest)
+				return
+			}
+			if len(imgBytes) > 2<<20 {
+				http.Error(w, "image too large", http.StatusBadRequest)
+				return
+			}
+		}
+
+		_, err := db.Exec(
+			`UPDATE topics 
+			SET description = $2, image = COALESCE($3, image), 
+			image_updated_at = CASE WHEN $3 IS NOT NULL THEN now() 
+			ELSE image_updated_at END
+			WHERE name = $1`,
+			t.Name,
+			t.Description,
+			imgBytes,
+		)
+		if err != nil {
+			log.Println("Database error:", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 
 		w.WriteHeader(http.StatusCreated)

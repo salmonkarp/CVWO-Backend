@@ -7,9 +7,10 @@ type User struct {
 }
 
 type Topic struct {
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	ImageURL    *string `json:"imageUrl"`
+	Name           string  `json:"name"`
+	Description    string  `json:"description"`
+	ImageURL       *string `json:"imageUrl"`
+	ImageUpdatedAt int64   `json:"imageUpdatedAt,omitempty"`
 }
 
 type Post struct {
