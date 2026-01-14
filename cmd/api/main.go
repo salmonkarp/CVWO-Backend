@@ -35,6 +35,8 @@ func main() {
 	mux.HandleFunc("/posts/{id}", handlers.GetPost(db.Conn))
 	mux.HandleFunc("/posts/{id}/comments", handlers.GetCommentsByPost(db.Conn))
 
+	mux.Handle("/addpost", middleware.Auth(handlers.AddPost(db.Conn)))
+
 	handler := middleware.CORS(mux)
 
 	log.Println("API running on :8080")

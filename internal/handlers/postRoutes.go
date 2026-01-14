@@ -1,10 +1,15 @@
 package handlers
 
 import (
+	"backend/internal/auth"
 	"backend/internal/models"
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
+	"strings"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func GetPostsByTopic(db *sql.DB) http.HandlerFunc {
@@ -53,4 +58,48 @@ func GetPost(db *sql.DB) http.HandlerFunc {
 
 		json.NewEncoder(w).Encode(p)
 	}
+}
+
+func AddPost(db *sql.DB) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Extract user ID from JWT token
+		header := r.Header.Get("Authorization")
+		tokenStr := strings.TrimPrefix(header, "Bearer ")
+		token, err := auth.ParseToken(tokenStr)
+		if err != nil {
+			http.Error(w, "Invalid Token", http.StatusUnauthorized)
+			return
+		}
+
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Invalid Token Claims", http.StatusUnauthorized)
+			return
+		}
+
+		userID := int(claims["sub"].(float64))
+
+		var t models.Post
+
+		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			log.Println("Error decoding JSON:", err)
+			return
+		}
+
+		_, err = db.Exec(
+			`INSERT INTO posts (title, body, topic, creator) VALUES ($1, $2, $3, $4)`,
+			t.Title,
+			t.Body,
+			t.Topic,
+			userID,
+		)
+		if err != nil {
+			log.Println("Database error:", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusCreated)
+	})
 }
