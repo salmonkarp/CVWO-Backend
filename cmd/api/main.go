@@ -22,9 +22,13 @@ func main() {
 	mux.HandleFunc("/login", handlers.Login)
 	mux.Handle("/protected", middleware.Auth(http.HandlerFunc(handlers.Protected)))
 
+	mux.HandleFunc("/user/{id}", handlers.GetUser(db.Conn))
+	mux.HandleFunc("/user/{id}/image", handlers.GetUserImage(db.Conn))
+
 	mux.Handle("/topics", middleware.Auth(handlers.GetTopics(db.Conn)))
 	mux.HandleFunc("/topics/{name}", handlers.GetTopic(db.Conn))
 	mux.HandleFunc("/topics/{name}/posts", handlers.GetPostsByTopic(db.Conn))
+	mux.HandleFunc("/topics/{name}/image", handlers.GetTopicImage(db.Conn))
 
 	mux.Handle("/addtopic", middleware.Auth(handlers.AddTopic(db.Conn)))
 
