@@ -1,9 +1,10 @@
 package models
 
 type User struct {
-	ID       int     `json:"id"`
-	Username string  `json:"username"`
-	ImageURL *string `json:"imageUrl"`
+	ID             int     `json:"id"`
+	Username       string  `json:"username"`
+	ImageURL       *string `json:"imageUrl"`
+	ImageUpdatedAt int64   `json:"imageUpdatedAt,omitempty"`
 }
 
 type Topic struct {

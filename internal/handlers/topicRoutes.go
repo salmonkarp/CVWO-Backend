@@ -163,30 +163,32 @@ func EditTopic(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		var imgBytes []byte
+		var imgBytes interface{} = nil
+
 		if t.ImageBase64 != "" {
-			var err error
-			imgBytes, err = base64.StdEncoding.DecodeString(t.ImageBase64)
+			decoded, err := base64.StdEncoding.DecodeString(t.ImageBase64)
 			if err != nil {
 				http.Error(w, "invalid base64 image", http.StatusBadRequest)
 				return
 			}
-			if len(imgBytes) > 2<<20 {
+			if len(decoded) > 2<<20 {
 				http.Error(w, "image too large", http.StatusBadRequest)
 				return
 			}
+			imgBytes = decoded
 		}
 
 		_, err := db.Exec(
 			`UPDATE topics 
 			SET description = $2, image = COALESCE($3, image), 
-			image_updated_at = CASE WHEN $3 IS NOT NULL THEN now() 
-			ELSE image_updated_at END
+				image_updated_at = CASE WHEN $3 IS NOT NULL THEN now() 
+										ELSE image_updated_at END
 			WHERE name = $1`,
 			t.Name,
 			t.Description,
 			imgBytes,
 		)
+
 		if err != nil {
 			log.Println("Database error:", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)

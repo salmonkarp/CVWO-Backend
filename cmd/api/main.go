@@ -24,6 +24,7 @@ func main() {
 
 	mux.HandleFunc("/user/{id}", handlers.GetUser(db.Conn))
 	mux.HandleFunc("/user/{id}/image", handlers.GetUserImage(db.Conn))
+	mux.Handle("/edituser", middleware.Auth(handlers.EditUser(db.Conn)))
 
 	mux.Handle("/topics", middleware.Auth(handlers.GetTopics(db.Conn)))
 	mux.HandleFunc("/topics/{name}", handlers.GetTopic(db.Conn))
@@ -37,6 +38,12 @@ func main() {
 	mux.HandleFunc("/posts/{id}/comments", handlers.GetCommentsByPost(db.Conn))
 
 	mux.Handle("/addpost", middleware.Auth(handlers.AddPost(db.Conn)))
+	mux.Handle("/editpost", middleware.Auth(handlers.EditPost(db.Conn)))
+	mux.Handle("/deletepost", middleware.Auth(handlers.DeletePost(db.Conn)))
+
+	mux.Handle("/addcomment", middleware.Auth(handlers.AddComment(db.Conn)))
+	mux.Handle("/editcomment", middleware.Auth(handlers.EditComment(db.Conn)))
+	mux.Handle("/deletecomment", middleware.Auth(handlers.DeleteComment(db.Conn)))
 
 	handler := middleware.CORS(mux)
 

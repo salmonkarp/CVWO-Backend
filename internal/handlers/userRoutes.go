@@ -1,10 +1,16 @@
 package handlers
 
 import (
+	"backend/internal/auth"
 	"backend/internal/models"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
+	"log"
 	"net/http"
+	"strings"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func GetUser(db *sql.DB) http.HandlerFunc {
@@ -12,22 +18,23 @@ func GetUser(db *sql.DB) http.HandlerFunc {
 		id := r.PathValue("id")
 
 		var (
-			t        models.User
-			hasImage bool
+			t          models.User
+			hasImage   bool
+			imageEpoch float64
 		)
 
 		err := db.QueryRow(
-			`SELECT id, username, image IS NOT NULL
+			`SELECT id, username, image IS NOT NULL, EXTRACT(EPOCH FROM image_updated_at)
              FROM users WHERE id = $1`,
 			id,
-		).Scan(&t.ID, &t.Username, &hasImage)
+		).Scan(&t.ID, &t.Username, &hasImage, &imageEpoch)
 
 		if err != nil {
 			err2 := db.QueryRow(
-				`SELECT id, username, image IS NOT NULL
+				`SELECT id, username, image IS NOT NULL, EXTRACT(EPOCH FROM image_updated_at)
 				FROM users WHERE username = $1`,
 				id,
-			).Scan(&t.ID, &t.Username, &hasImage)
+			).Scan(&t.ID, &t.Username, &hasImage, &imageEpoch)
 			if err2 != nil {
 				http.Error(w, err2.Error(), http.StatusInternalServerError)
 				return
@@ -35,8 +42,9 @@ func GetUser(db *sql.DB) http.HandlerFunc {
 		}
 
 		if hasImage {
-			url := "/users/" + t.Username + "/image"
+			url := "/user/" + t.Username + "/image"
 			t.ImageURL = &url
+			t.ImageUpdatedAt = int64(imageEpoch)
 		}
 
 		json.NewEncoder(w).Encode(t)
@@ -47,18 +55,87 @@ func GetUserImage(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 
-		row := db.QueryRow(
+		var image []byte
+		err := db.QueryRow(
 			`SELECT image FROM users WHERE id = $1`,
 			id,
-		)
+		).Scan(&image)
 
-		var image []byte
-		if err := row.Scan(&image); err != nil {
-			http.Error(w, "image not found", http.StatusNotFound)
-			return
+		if err != nil {
+			err2 := db.QueryRow(
+				`SELECT image FROM users WHERE username = $1`,
+				id,
+			).Scan(&image)
+			if err2 != nil {
+				http.Error(w, "image not found", http.StatusNotFound)
+				return
+			}
 		}
 
 		w.Header().Set("Content-Type", "image/png")
 		w.Write(image)
 	}
+}
+
+func EditUser(db *sql.DB) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var t struct {
+			ImageBase64 string `json:"image,omitempty"`
+		}
+
+		header := r.Header.Get("Authorization")
+		tokenStr := strings.TrimPrefix(header, "Bearer ")
+		token, err := auth.ParseToken(tokenStr)
+		if err != nil {
+			http.Error(w, "Invalid Token", http.StatusUnauthorized)
+			return
+		}
+
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Invalid Token Claims", http.StatusUnauthorized)
+			return
+		}
+
+		userID := int(claims["sub"].(float64))
+
+		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			log.Println("Error decoding JSON:", err)
+			return
+		}
+
+		var imgBytes interface{} = nil
+
+		if t.ImageBase64 != "" {
+			decoded, err := base64.StdEncoding.DecodeString(t.ImageBase64)
+			if err != nil {
+				http.Error(w, "invalid base64 image", http.StatusBadRequest)
+				return
+			}
+			if len(decoded) > 2<<20 {
+				http.Error(w, "image too large", http.StatusBadRequest)
+				return
+			}
+			imgBytes = decoded
+		}
+
+		_, err = db.Exec(
+			`UPDATE users 
+			SET image = COALESCE($1, image), 
+				image_updated_at = CASE WHEN $1 IS NOT NULL THEN now() 
+										ELSE image_updated_at END
+			WHERE id = $2`,
+			imgBytes,
+			userID,
+		)
+
+		if err != nil {
+			log.Println("Database error:", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusAccepted)
+	})
 }
