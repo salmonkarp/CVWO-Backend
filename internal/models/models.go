@@ -31,4 +31,5 @@ type Comment struct {
 	Creator   int    `json:"creator"`
 	CreatedAt string `json:"created_at"`
 	IsEdited  bool   `json:"is_edited"`
+	Parent    *int   `json:"parent,omitempty"`
 }
