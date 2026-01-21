@@ -67,7 +67,7 @@ func GetUserImage(db *sql.DB) http.HandlerFunc {
 				id,
 			).Scan(&image)
 			if err2 != nil {
-				http.Error(w, "image not found", http.StatusNotFound)
+				http.Error(w, "Image not found.", http.StatusNotFound)
 				return
 			}
 		}
@@ -87,20 +87,20 @@ func EditUser(db *sql.DB) http.HandlerFunc {
 		tokenStr := strings.TrimPrefix(header, "Bearer ")
 		token, err := auth.ParseToken(tokenStr)
 		if err != nil {
-			http.Error(w, "Invalid Token", http.StatusUnauthorized)
+			http.Error(w, "Invalid Token.", http.StatusUnauthorized)
 			return
 		}
 
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
-			http.Error(w, "Invalid Token Claims", http.StatusUnauthorized)
+			http.Error(w, "Invalid Token Claims.", http.StatusUnauthorized)
 			return
 		}
 
 		userID := int(claims["sub"].(float64))
 
 		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			http.Error(w, "Invalid JSON.", http.StatusBadRequest)
 			log.Println("Error decoding JSON:", err)
 			return
 		}
@@ -110,11 +110,11 @@ func EditUser(db *sql.DB) http.HandlerFunc {
 		if t.ImageBase64 != "" {
 			decoded, err := base64.StdEncoding.DecodeString(t.ImageBase64)
 			if err != nil {
-				http.Error(w, "invalid base64 image", http.StatusBadRequest)
+				http.Error(w, "Invalid base64 image.", http.StatusBadRequest)
 				return
 			}
 			if len(decoded) > 2<<20 {
-				http.Error(w, "image too large", http.StatusBadRequest)
+				http.Error(w, "Image too large.", http.StatusBadRequest)
 				return
 			}
 			imgBytes = decoded

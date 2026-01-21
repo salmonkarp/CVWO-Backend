@@ -17,14 +17,14 @@ func GetCommentsByPost(db *sql.DB) http.HandlerFunc {
 		postID := r.PathValue("id")
 
 		rows, err := db.Query(
-			`SELECT id, body, post, creator, created_at
+			`SELECT id, body, post, creator, created_at, is_edited
 			 FROM comments
 			 WHERE post = $1
 			 ORDER BY created_at ASC`,
 			postID,
 		)
 		if err != nil {
-			http.Error(w, "query failed", http.StatusInternalServerError)
+			http.Error(w, "Query failed.", http.StatusInternalServerError)
 			return
 		}
 		defer rows.Close()
@@ -32,7 +32,7 @@ func GetCommentsByPost(db *sql.DB) http.HandlerFunc {
 		comments := []models.Comment{}
 		for rows.Next() {
 			var c models.Comment
-			rows.Scan(&c.ID, &c.Body, &c.Post, &c.Creator, &c.CreatedAt)
+			rows.Scan(&c.ID, &c.Body, &c.Post, &c.Creator, &c.CreatedAt, &c.IsEdited)
 			comments = append(comments, c)
 		}
 
@@ -46,13 +46,13 @@ func AddComment(db *sql.DB) http.HandlerFunc {
 		tokenStr := strings.TrimPrefix(header, "Bearer ")
 		token, err := auth.ParseToken(tokenStr)
 		if err != nil {
-			http.Error(w, "Invalid Token", http.StatusUnauthorized)
+			http.Error(w, "Invalid Token.", http.StatusUnauthorized)
 			return
 		}
 
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
-			http.Error(w, "Invalid Token Claims", http.StatusUnauthorized)
+			http.Error(w, "Invalid Token Claims.", http.StatusUnauthorized)
 			return
 		}
 
@@ -61,8 +61,13 @@ func AddComment(db *sql.DB) http.HandlerFunc {
 		var t models.Comment
 
 		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			http.Error(w, "Invalid JSON.", http.StatusBadRequest)
 			log.Println("Error decoding JSON:", err)
+			return
+		}
+
+		if len(t.Body) > 500 {
+			http.Error(w, "Comment body too long.", http.StatusBadRequest)
 			return
 		}
 
@@ -88,13 +93,13 @@ func EditComment(db *sql.DB) http.HandlerFunc {
 		tokenStr := strings.TrimPrefix(header, "Bearer ")
 		token, err := auth.ParseToken(tokenStr)
 		if err != nil {
-			http.Error(w, "Invalid Token", http.StatusUnauthorized)
+			http.Error(w, "Invalid Token.", http.StatusUnauthorized)
 			return
 		}
 
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
-			http.Error(w, "Invalid Token Claims", http.StatusUnauthorized)
+			http.Error(w, "Invalid Token Claims.", http.StatusUnauthorized)
 			return
 		}
 
@@ -103,13 +108,18 @@ func EditComment(db *sql.DB) http.HandlerFunc {
 		var t models.Comment
 
 		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			http.Error(w, "Invalid JSON.", http.StatusBadRequest)
 			log.Println("Error decoding JSON:", err)
 			return
 		}
 
+		if len(t.Body) > 500 {
+			http.Error(w, "Comment body too long.", http.StatusBadRequest)
+			return
+		}
+
 		_, err = db.Exec(
-			`UPDATE comments SET body = $1 WHERE id = $2 AND creator = $3`,
+			`UPDATE comments SET body = $1, is_edited = TRUE WHERE id = $2 AND creator = $3`,
 			t.Body,
 			t.ID,
 			userID,
@@ -130,13 +140,13 @@ func DeleteComment(db *sql.DB) http.HandlerFunc {
 		tokenStr := strings.TrimPrefix(header, "Bearer ")
 		token, err := auth.ParseToken(tokenStr)
 		if err != nil {
-			http.Error(w, "Invalid Token", http.StatusUnauthorized)
+			http.Error(w, "Invalid Token.", http.StatusUnauthorized)
 			return
 		}
 
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
-			http.Error(w, "Invalid Token Claims", http.StatusUnauthorized)
+			http.Error(w, "Invalid Token Claims.", http.StatusUnauthorized)
 			return
 		}
 
@@ -145,7 +155,7 @@ func DeleteComment(db *sql.DB) http.HandlerFunc {
 		var t models.Comment
 
 		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			http.Error(w, "Invalid JSON.", http.StatusBadRequest)
 			log.Println("Error decoding JSON:", err)
 			return
 		}

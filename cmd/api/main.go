@@ -33,6 +33,7 @@ func main() {
 
 	mux.Handle("/addtopic", middleware.Auth(handlers.AddTopic(db.Conn)))
 	mux.Handle("/edittopic", middleware.Auth(handlers.EditTopic(db.Conn)))
+	mux.Handle("/deletetopic", middleware.Auth(handlers.DeleteTopic(db.Conn)))
 
 	mux.HandleFunc("/posts/{id}", handlers.GetPost(db.Conn))
 	mux.HandleFunc("/posts/{id}/comments", handlers.GetCommentsByPost(db.Conn))

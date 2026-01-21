@@ -21,6 +21,7 @@ type Post struct {
 	Topic     string `json:"topic"`
 	Creator   int    `json:"creator"`
 	CreatedAt string `json:"created_at"`
+	IsEdited  bool   `json:"is_edited"`
 }
 
 type Comment struct {
@@ -29,4 +30,5 @@ type Comment struct {
 	Post      int    `json:"post"`
 	Creator   int    `json:"creator"`
 	CreatedAt string `json:"created_at"`
+	IsEdited  bool   `json:"is_edited"`
 }

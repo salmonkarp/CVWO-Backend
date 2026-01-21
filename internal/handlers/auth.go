@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"regexp"
 
 	"backend/internal/auth"
 	"backend/internal/db"
@@ -20,6 +21,14 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(req.Username) > 20 {
+		http.Error(w, "Username is too long.", http.StatusBadRequest)
+		return
+	} else if !regexp.MustCompile(`^\d*[a-zA-Z][a-zA-Z0-9]*$`).MatchString(req.Username) {
+		http.Error(w, "Username must be alphanumeric, and must have at least one alphabetical character.", http.StatusBadRequest)
+		return
+	}
+
 	var userID int
 
 	err := db.Conn.QueryRow(
@@ -28,13 +37,26 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	).Scan(&userID)
 
 	if err == sql.ErrNoRows {
-		http.Error(w, "invalid username", http.StatusUnauthorized)
-		return
+		_, insertErr := db.Conn.Exec(
+			"INSERT INTO users (username) VALUES ($1)",
+			req.Username,
+		)
+
+		if insertErr != nil {
+			http.Error(w, "Failed to register. "+insertErr.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		db.Conn.QueryRow(
+			"SELECT id FROM users WHERE username = $1",
+			req.Username,
+		).Scan(&userID)
+
 	}
 
-	token, _ := auth.GenerateToken(userID)
+	token, tokenErr := auth.GenerateToken(userID)
 
-	if err != nil {
+	if tokenErr != nil {
 		http.Error(w, "Token Error", http.StatusInternalServerError)
 		return
 	}

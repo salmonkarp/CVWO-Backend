@@ -17,14 +17,14 @@ func GetPostsByTopic(db *sql.DB) http.HandlerFunc {
 		topicName := r.PathValue("name")
 
 		rows, err := db.Query(
-			`SELECT id, title, body, topic, creator, created_at
+			`SELECT id, title, body, topic, creator, created_at, is_edited
 			 FROM posts
 			 WHERE topic = $1
 			 ORDER BY created_at DESC`,
 			topicName,
 		)
 		if err != nil {
-			http.Error(w, "query failed", http.StatusInternalServerError)
+			http.Error(w, "Query failed.", http.StatusInternalServerError)
 			return
 		}
 		defer rows.Close()
@@ -32,7 +32,7 @@ func GetPostsByTopic(db *sql.DB) http.HandlerFunc {
 		posts := []models.Post{}
 		for rows.Next() {
 			var p models.Post
-			rows.Scan(&p.ID, &p.Title, &p.Body, &p.Topic, &p.Creator, &p.CreatedAt)
+			rows.Scan(&p.ID, &p.Title, &p.Body, &p.Topic, &p.Creator, &p.CreatedAt, &p.IsEdited)
 			posts = append(posts, p)
 		}
 
@@ -45,14 +45,14 @@ func GetPost(db *sql.DB) http.HandlerFunc {
 		postID := r.PathValue("id")
 
 		row := db.QueryRow(
-			`SELECT id, title, body, topic, creator, created_at
+			`SELECT id, title, body, topic, creator, created_at, is_edited
 			 FROM posts WHERE id = $1`,
 			postID,
 		)
 
 		var p models.Post
-		if err := row.Scan(&p.ID, &p.Title, &p.Body, &p.Topic, &p.Creator, &p.CreatedAt); err != nil {
-			http.Error(w, "post not found", http.StatusNotFound)
+		if err := row.Scan(&p.ID, &p.Title, &p.Body, &p.Topic, &p.Creator, &p.CreatedAt, &p.IsEdited); err != nil {
+			http.Error(w, "Post not found.", http.StatusNotFound)
 			return
 		}
 
@@ -66,13 +66,13 @@ func AddPost(db *sql.DB) http.HandlerFunc {
 		tokenStr := strings.TrimPrefix(header, "Bearer ")
 		token, err := auth.ParseToken(tokenStr)
 		if err != nil {
-			http.Error(w, "Invalid Token", http.StatusUnauthorized)
+			http.Error(w, "Invalid Token.", http.StatusUnauthorized)
 			return
 		}
 
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
-			http.Error(w, "Invalid Token Claims", http.StatusUnauthorized)
+			http.Error(w, "Invalid Token Claims.", http.StatusUnauthorized)
 			return
 		}
 
@@ -81,8 +81,16 @@ func AddPost(db *sql.DB) http.HandlerFunc {
 		var t models.Post
 
 		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			http.Error(w, "Invalid JSON.", http.StatusBadRequest)
 			log.Println("Error decoding JSON:", err)
+			return
+		}
+
+		if len(t.Title) > 100 {
+			http.Error(w, "Post title too long.", http.StatusBadRequest)
+			return
+		} else if len(t.Body) > 3000 {
+			http.Error(w, "Post description too long.", http.StatusBadRequest)
 			return
 		}
 
@@ -111,27 +119,35 @@ func EditPost(db *sql.DB) http.HandlerFunc {
 		tokenStr := strings.TrimPrefix(header, "Bearer ")
 		token, err := auth.ParseToken(tokenStr)
 		if err != nil {
-			http.Error(w, "Invalid Token", http.StatusUnauthorized)
+			http.Error(w, "Invalid Token.", http.StatusUnauthorized)
 			return
 		}
 
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
-			http.Error(w, "Invalid Token Claims", http.StatusUnauthorized)
+			http.Error(w, "Invalid Token Claims.", http.StatusUnauthorized)
 			return
 		}
 
 		userID := int(claims["sub"].(float64))
 
 		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			http.Error(w, "Invalid JSON.", http.StatusBadRequest)
 			log.Println("Error decoding JSON:", err)
+			return
+		}
+
+		if len(t.Title) > 100 {
+			http.Error(w, "Post title too long.", http.StatusBadRequest)
+			return
+		} else if len(t.Body) > 3000 {
+			http.Error(w, "Post description too long.", http.StatusBadRequest)
 			return
 		}
 
 		_, err = db.Exec(
 			`UPDATE posts 
-			SET title = $1, body = $2
+			SET title = $1, body = $2, is_edited = TRUE
 			WHERE id = $3 AND creator = $4`,
 			t.Title,
 			t.Body,
@@ -157,20 +173,20 @@ func DeletePost(db *sql.DB) http.HandlerFunc {
 		tokenStr := strings.TrimPrefix(header, "Bearer ")
 		token, err := auth.ParseToken(tokenStr)
 		if err != nil {
-			http.Error(w, "Invalid Token", http.StatusUnauthorized)
+			http.Error(w, "Invalid Token.", http.StatusUnauthorized)
 			return
 		}
 
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
-			http.Error(w, "Invalid Token Claims", http.StatusUnauthorized)
+			http.Error(w, "Invalid Token Claims.", http.StatusUnauthorized)
 			return
 		}
 
 		userID := int(claims["sub"].(float64))
 
 		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			http.Error(w, "Invalid JSON.", http.StatusBadRequest)
 			log.Println("Error decoding JSON:", err)
 			return
 		}

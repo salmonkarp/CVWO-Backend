@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"regexp"
 )
 
 func GetTopics(db *sql.DB) http.HandlerFunc {
@@ -32,6 +33,7 @@ func GetTopics(db *sql.DB) http.HandlerFunc {
 
 			if err := rows.Scan(&t.Name, &t.Description, &hasImage, &imageEpoch); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
+				log.Println(err.Error())
 				return
 			}
 
@@ -65,7 +67,8 @@ func GetTopic(db *sql.DB) http.HandlerFunc {
 		).Scan(&t.Name, &t.Description, &hasImage, &imageEpoch)
 
 		if err != nil {
-			http.Error(w, "topic not found", http.StatusNotFound)
+			http.Error(w, "Topic not found.", http.StatusNotFound)
+			log.Println(err.Error())
 			return
 		}
 
@@ -90,11 +93,10 @@ func GetTopicImage(db *sql.DB) http.HandlerFunc {
 
 		var image []byte
 		if err := row.Scan(&image); err != nil {
-			http.Error(w, "image not found", http.StatusNotFound)
+			http.Error(w, "Image not found.", http.StatusNotFound)
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
-
 		w.Header().Set("Content-Type", "image/png")
 		w.Write(image)
 	}
@@ -109,23 +111,35 @@ func AddTopic(db *sql.DB) http.Handler {
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			http.Error(w, "Invalid JSON.", http.StatusBadRequest)
 			log.Println("Error decoding JSON:", err)
 			return
 		}
 
-		var imgBytes []byte
+		if len(t.Name) > 50 {
+			http.Error(w, "Topic name too long.", http.StatusBadRequest)
+			return
+		} else if !regexp.MustCompile("^[a-zA-Z0-9]*$").MatchString(t.Name) {
+			http.Error(w, "Topic name must contain only alphanumeric characters.", http.StatusBadRequest)
+			return
+		} else if len(t.Description) > 1000 {
+			http.Error(w, "Topic description too long.", http.StatusBadRequest)
+			return
+		}
+
+		var imgBytes interface{} = nil
+
 		if t.ImageBase64 != "" {
-			var err error
-			imgBytes, err = base64.StdEncoding.DecodeString(t.ImageBase64)
+			decoded, err := base64.StdEncoding.DecodeString(t.ImageBase64)
 			if err != nil {
-				http.Error(w, "invalid base64 image", http.StatusBadRequest)
+				http.Error(w, "Invalid base64 image.", http.StatusBadRequest)
 				return
 			}
-			if len(imgBytes) > 2<<20 {
-				http.Error(w, "image too large", http.StatusBadRequest)
+			if len(decoded) > 2<<20 {
+				http.Error(w, "Image too large.", http.StatusBadRequest)
 				return
 			}
+			imgBytes = decoded
 		}
 
 		_, err := db.Exec(
@@ -135,14 +149,9 @@ func AddTopic(db *sql.DB) http.Handler {
 			imgBytes,
 		)
 		if err != nil {
-			if err.Error() == "pq: duplicate key value violates unique constraint \"topics_pkey\"" {
-				http.Error(w, "Topic already exists.", http.StatusConflict)
-				return
-			} else {
-				log.Println("Database error:", err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
+			log.Println("Database error:", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 
 		w.WriteHeader(http.StatusCreated)
@@ -158,8 +167,19 @@ func EditTopic(db *sql.DB) http.HandlerFunc {
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			http.Error(w, "Invalid JSON.", http.StatusBadRequest)
 			log.Println("Error decoding JSON:", err)
+			return
+		}
+
+		if len(t.Name) > 50 {
+			http.Error(w, "Topic name too long.", http.StatusBadRequest)
+			return
+		} else if !regexp.MustCompile("^[a-zA-Z0-9]*$").MatchString(t.Name) {
+			http.Error(w, "Topic name must contain only alphanumeric characters.", http.StatusBadRequest)
+			return
+		} else if len(t.Description) > 1000 {
+			http.Error(w, "Topic description too long.", http.StatusBadRequest)
 			return
 		}
 
@@ -168,11 +188,11 @@ func EditTopic(db *sql.DB) http.HandlerFunc {
 		if t.ImageBase64 != "" {
 			decoded, err := base64.StdEncoding.DecodeString(t.ImageBase64)
 			if err != nil {
-				http.Error(w, "invalid base64 image", http.StatusBadRequest)
+				http.Error(w, "Invalid base64 image.", http.StatusBadRequest)
 				return
 			}
 			if len(decoded) > 2<<20 {
-				http.Error(w, "image too large", http.StatusBadRequest)
+				http.Error(w, "Image too large.", http.StatusBadRequest)
 				return
 			}
 			imgBytes = decoded
@@ -195,6 +215,32 @@ func EditTopic(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		w.WriteHeader(http.StatusCreated)
+		w.WriteHeader(http.StatusAccepted)
+	})
+}
+
+func DeleteTopic(db *sql.DB) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var t models.Topic
+
+		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+			http.Error(w, "Invalid JSON.", http.StatusBadRequest)
+			log.Println("Error decoding JSON:", err)
+			return
+		}
+
+		_, err := db.Exec(
+			`DELETE FROM TOPICS
+			WHERE name = $1`,
+			t.Name,
+		)
+
+		if err != nil {
+			log.Println("Database error:", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusAccepted)
 	})
 }
