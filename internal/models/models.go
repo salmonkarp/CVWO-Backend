@@ -15,13 +15,16 @@ type Topic struct {
 }
 
 type Post struct {
-	ID        int    `json:"id"`
-	Title     string `json:"title"`
-	Body      string `json:"body"`
-	Topic     string `json:"topic"`
-	Creator   int    `json:"creator"`
-	CreatedAt string `json:"created_at"`
-	IsEdited  bool   `json:"is_edited"`
+	ID               int    `json:"id"`
+	Title            string `json:"title"`
+	Body             string `json:"body"`
+	Topic            string `json:"topic"`
+	Creator          int    `json:"creator"`
+	CreatedAt        string `json:"created_at"`
+	IsEdited         bool   `json:"is_edited"`
+	Score            int    `json:"score"`
+	UserVote         int    `json:"user_vote,omitempty"`
+	ScoreWithoutUser int    `json:"score_without_user,omitempty"`
 }
 
 type Comment struct {

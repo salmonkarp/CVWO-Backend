@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"unicode"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -21,24 +22,30 @@ func GetUser(db *sql.DB) http.HandlerFunc {
 			t          models.User
 			hasImage   bool
 			imageEpoch float64
+			err        error
 		)
 
-		err := db.QueryRow(
-			`SELECT id, username, image IS NOT NULL, EXTRACT(EPOCH FROM image_updated_at)
-             FROM users WHERE id = $1`,
-			id,
-		).Scan(&t.ID, &t.Username, &hasImage, &imageEpoch)
-
-		if err != nil {
-			err2 := db.QueryRow(
+		if unicode.IsDigit(rune(id[0])) {
+			err = db.QueryRow(
+				`SELECT id, username, image IS NOT NULL, EXTRACT(EPOCH FROM image_updated_at)
+	             FROM users WHERE id = $1`,
+				id,
+			).Scan(&t.ID, &t.Username, &hasImage, &imageEpoch)
+		} else {
+			err = db.QueryRow(
 				`SELECT id, username, image IS NOT NULL, EXTRACT(EPOCH FROM image_updated_at)
 				FROM users WHERE username = $1`,
 				id,
 			).Scan(&t.ID, &t.Username, &hasImage, &imageEpoch)
-			if err2 != nil {
-				http.Error(w, err2.Error(), http.StatusInternalServerError)
-				return
+		}
+
+		if err != nil {
+			if err == sql.ErrNoRows {
+				http.Error(w, "User not found", http.StatusNotFound)
+			} else {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
+			return
 		}
 
 		if hasImage {
@@ -55,21 +62,26 @@ func GetUserImage(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 
-		var image []byte
-		err := db.QueryRow(
-			`SELECT image FROM users WHERE id = $1`,
-			id,
-		).Scan(&image)
+		var (
+			image []byte
+			err   error
+		)
 
-		if err != nil {
-			err2 := db.QueryRow(
+		if unicode.IsDigit(rune(id[0])) {
+			err = db.QueryRow(
+				`SELECT image FROM users WHERE id = $1`,
+				id,
+			).Scan(&image)
+		} else {
+			err = db.QueryRow(
 				`SELECT image FROM users WHERE username = $1`,
 				id,
 			).Scan(&image)
-			if err2 != nil {
-				http.Error(w, "Image not found.", http.StatusNotFound)
-				return
-			}
+		}
+
+		if err != nil {
+			http.Error(w, "Image not found.", http.StatusNotFound)
+			return
 		}
 
 		w.Header().Set("Content-Type", "image/png")
@@ -105,7 +117,7 @@ func EditUser(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		var imgBytes interface{} = nil
+		var imgBytes any = nil
 
 		if t.ImageBase64 != "" {
 			decoded, err := base64.StdEncoding.DecodeString(t.ImageBase64)
