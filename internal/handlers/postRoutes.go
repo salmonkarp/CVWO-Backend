@@ -97,7 +97,7 @@ func GetPost(db *sql.DB) http.HandlerFunc {
 				COALESCE(
 					(SELECT SUM(CASE WHEN is_positive THEN 1 ELSE -1 END)
 					FROM post_votes
-					WHERE post_id = p.id),
+					WHERE post_id = post.id),
 				0) AS score,
 				(SELECT 
 					CASE 
@@ -105,8 +105,8 @@ func GetPost(db *sql.DB) http.HandlerFunc {
 						WHEN is_positive IS FALSE THEN -1 
 						ELSE NULL 
 					END 
-				FROM post_votes WHERE post_id = p.id AND user_id = $2 LIMIT 1) AS user_vote
-			 FROM posts WHERE id = $1`,
+				FROM post_votes WHERE post_id = post.id AND user_id = $2 LIMIT 1) AS user_vote
+			 FROM posts post WHERE id = $1`,
 			postID,
 			userID,
 		)
