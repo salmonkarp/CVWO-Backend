@@ -16,7 +16,7 @@ func Auth(next http.Handler) http.Handler {
 		}
 
 		tokenStr := strings.TrimPrefix(header, "Bearer ")
-		_, err := auth.ParseToken(tokenStr)
+		_, err := auth.VerifyToken(tokenStr)
 		if err != nil {
 			http.Error(w, "Invalid Token", http.StatusUnauthorized)
 			return

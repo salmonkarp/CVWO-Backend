@@ -10,8 +10,6 @@ import (
 	"net/http"
 	"strings"
 	"unicode"
-
-	"github.com/golang-jwt/jwt/v5"
 )
 
 func GetUser(db *sql.DB) http.HandlerFunc {
@@ -97,19 +95,11 @@ func EditUser(db *sql.DB) http.HandlerFunc {
 
 		header := r.Header.Get("Authorization")
 		tokenStr := strings.TrimPrefix(header, "Bearer ")
-		token, err := auth.ParseToken(tokenStr)
+		userID, err := auth.VerifyToken(tokenStr)
 		if err != nil {
 			http.Error(w, "Invalid Token.", http.StatusUnauthorized)
 			return
 		}
-
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			http.Error(w, "Invalid Token Claims.", http.StatusUnauthorized)
-			return
-		}
-
-		userID := int(claims["sub"].(float64))
 
 		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
 			http.Error(w, "Invalid JSON.", http.StatusBadRequest)

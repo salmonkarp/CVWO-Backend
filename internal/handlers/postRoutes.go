@@ -8,8 +8,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-
-	"github.com/golang-jwt/jwt/v5"
 )
 
 func GetPostsByTopic(db *sql.DB) http.HandlerFunc {
@@ -19,23 +17,39 @@ func GetPostsByTopic(db *sql.DB) http.HandlerFunc {
 		header := r.Header.Get("Authorization")
 		tokenStr := strings.TrimPrefix(header, "Bearer ")
 		var userID int
-		token, errToken := auth.ParseToken(tokenStr)
-		if errToken == nil {
-			if claims, ok := token.Claims.(jwt.MapClaims); ok {
-				userID = int(claims["sub"].(float64))
-			}
+		if uid, err := auth.VerifyToken(tokenStr); err == nil {
+			userID = uid
 		}
 
-		rows, err := db.Query(
-			`SELECT p.id, p.title, p.body, p.topic, p.creator, p.created_at, p.is_edited,
-					COALESCE(SUM(CASE WHEN pv.is_positive IS TRUE THEN 1 WHEN pv.is_positive IS FALSE THEN -1 ELSE 0 END), 0) AS score,
-					MAX(CASE WHEN pv_user.is_positive IS TRUE THEN 1 WHEN pv_user.is_positive IS FALSE THEN -1 ELSE NULL END) AS user_vote
-			 FROM posts p
-			 LEFT JOIN post_votes pv ON p.id = pv.post_id
-			 LEFT JOIN post_votes pv_user ON p.id = pv_user.post_id AND pv_user.user_id = $2
-			 WHERE p.topic = $1
-			 GROUP BY p.id, p.title, p.body, p.topic, p.creator, p.created_at, p.is_edited
-			 ORDER BY score DESC`,
+		rows, err := db.Query(`
+			SELECT
+				p.id,
+				p.title,
+				p.body,
+				p.topic,
+				p.creator,
+				p.created_at,
+				p.is_edited,
+				COALESCE(SUM(
+					CASE
+						WHEN pv.is_positive THEN 1
+						ELSE -1
+					END
+				), 0) AS score,
+				MAX(
+					CASE
+						WHEN pv.user_id = $2 AND pv.is_positive THEN 1
+						WHEN pv.user_id = $2 AND NOT pv.is_positive THEN -1
+					END
+				) AS user_vote
+			FROM posts p
+			LEFT JOIN post_votes pv ON pv.post_id = p.id
+			WHERE p.topic = $1
+			GROUP BY
+				p.id, p.title, p.body, p.topic,
+				p.creator, p.created_at, p.is_edited
+			ORDER BY score DESC
+		`,
 			topicName,
 			userID,
 		)
@@ -67,17 +81,31 @@ func GetPost(db *sql.DB) http.HandlerFunc {
 		header := r.Header.Get("Authorization")
 		tokenStr := strings.TrimPrefix(header, "Bearer ")
 		var userID int
-		token, errToken := auth.ParseToken(tokenStr)
-		if errToken == nil {
-			if claims, ok := token.Claims.(jwt.MapClaims); ok {
-				userID = int(claims["sub"].(float64))
-			}
+		if uid, err := auth.VerifyToken(tokenStr); err == nil {
+			userID = uid
 		}
 
 		row := db.QueryRow(
-			`SELECT id, title, body, topic, creator, created_at, is_edited,
-				(SELECT COALESCE(SUM(CASE WHEN is_positive IS TRUE THEN 1 WHEN is_positive IS FALSE THEN -1 ELSE 0 END), 0) FROM post_votes WHERE post_id = posts.id) AS score,
-				(SELECT CASE WHEN is_positive IS TRUE THEN 1 WHEN is_positive IS FALSE THEN -1 ELSE NULL END FROM post_votes WHERE post_id = posts.id AND user_id = $2 LIMIT 1) AS user_vote
+			`SELECT 
+				id, 
+				title, 
+				body, 
+				topic, 
+				creator, 
+				created_at, 
+				is_edited,
+				COALESCE(
+					(SELECT SUM(CASE WHEN is_positive THEN 1 ELSE -1 END)
+					FROM post_votes
+					WHERE post_id = p.id),
+				0) AS score,
+				(SELECT 
+					CASE 
+						WHEN is_positive IS TRUE THEN 1 
+						WHEN is_positive IS FALSE THEN -1 
+						ELSE NULL 
+					END 
+				FROM post_votes WHERE post_id = p.id AND user_id = $2 LIMIT 1) AS user_vote
 			 FROM posts WHERE id = $1`,
 			postID,
 			userID,
@@ -101,19 +129,11 @@ func VotePost(db *sql.DB) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := r.Header.Get("Authorization")
 		tokenStr := strings.TrimPrefix(header, "Bearer ")
-		token, err := auth.ParseToken(tokenStr)
+		userID, err := auth.VerifyToken(tokenStr)
 		if err != nil {
 			http.Error(w, "Invalid Token.", http.StatusUnauthorized)
 			return
 		}
-
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			http.Error(w, "Invalid Token Claims.", http.StatusUnauthorized)
-			return
-		}
-
-		userID := int(claims["sub"].(float64))
 
 		var payload struct {
 			PostID     int   `json:"post_id"`
@@ -158,19 +178,11 @@ func AddPost(db *sql.DB) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := r.Header.Get("Authorization")
 		tokenStr := strings.TrimPrefix(header, "Bearer ")
-		token, err := auth.ParseToken(tokenStr)
+		userID, err := auth.VerifyToken(tokenStr)
 		if err != nil {
 			http.Error(w, "Invalid Token.", http.StatusUnauthorized)
 			return
 		}
-
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			http.Error(w, "Invalid Token Claims.", http.StatusUnauthorized)
-			return
-		}
-
-		userID := int(claims["sub"].(float64))
 
 		var t models.Post
 
@@ -211,19 +223,11 @@ func EditPost(db *sql.DB) http.HandlerFunc {
 
 		header := r.Header.Get("Authorization")
 		tokenStr := strings.TrimPrefix(header, "Bearer ")
-		token, err := auth.ParseToken(tokenStr)
+		userID, err := auth.VerifyToken(tokenStr)
 		if err != nil {
 			http.Error(w, "Invalid Token.", http.StatusUnauthorized)
 			return
 		}
-
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			http.Error(w, "Invalid Token Claims.", http.StatusUnauthorized)
-			return
-		}
-
-		userID := int(claims["sub"].(float64))
 
 		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
 			http.Error(w, "Invalid JSON.", http.StatusBadRequest)
@@ -265,19 +269,11 @@ func DeletePost(db *sql.DB) http.HandlerFunc {
 
 		header := r.Header.Get("Authorization")
 		tokenStr := strings.TrimPrefix(header, "Bearer ")
-		token, err := auth.ParseToken(tokenStr)
+		userID, err := auth.VerifyToken(tokenStr)
 		if err != nil {
 			http.Error(w, "Invalid Token.", http.StatusUnauthorized)
 			return
 		}
-
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			http.Error(w, "Invalid Token Claims.", http.StatusUnauthorized)
-			return
-		}
-
-		userID := int(claims["sub"].(float64))
 
 		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
 			http.Error(w, "Invalid JSON.", http.StatusBadRequest)
