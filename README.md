@@ -13,6 +13,8 @@ The frontend can be visited [here](https://github.com/salmonkarp/CVWO-Frontend).
 <img width="2238" height="1166" alt="image" src="https://github.com/user-attachments/assets/de7333c1-5bb6-4320-8628-6e7d79e58eeb" />
 4. Enjoy! You can start browsing through topics, viewing posts, and replying to posts and comments.
 
+Note: To add, edit or delete topics, you need to login with the username ‘admin’.
+
 ## Use of AI
 The main generative AI tools used to assist in this project are ChatGPT and Github Copilot. They were used to:
 - Obtain advice on initial project design & structure, mainly for the backend.
