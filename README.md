@@ -16,5 +16,5 @@ The frontend can be visited [here](https://github.com/salmonkarp/CVWO-Frontend).
 ## Use of AI
 The main generative AI tools used to assist in this project are ChatGPT and Github Copilot. They were used to:
 - Obtain advice on initial project design & structure, mainly for the backend.
-- Refactor some functions to separate files for clealiness of code.
+- Refactor some functions to separate files for cleanliness of code.
 - Fix a number of bugs, after online information was not able to help in fixing them
