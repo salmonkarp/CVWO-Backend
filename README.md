@@ -4,7 +4,7 @@
 A simple Vite + React + Typescript project to talk about topics. It communicates with this backend made with Go + Docker.
 
 You can visit [this website](https://cvwo-frontend-salmonkarp.netlify.app/) for the newest active deployment.
-The frontend can be visited [here](https://github.com/salmonkarp/CVWO-Frontend), which has been deployed onto AWS EC2.
+The frontend can be visited [here](https://github.com/salmonkarp/CVWO-Frontend).
 
 ## Quickstart / How to Use
 1. Visit the application through the [link provided](https://cvwo-frontend-salmonkarp.netlify.app/).
